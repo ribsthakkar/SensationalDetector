@@ -102,12 +102,14 @@ except:
     pickle.dump(chunk_vectorizer, open("chunkvect.pkl", "wb"))
     print("Created pickle for the first time for chunk vectorizer")
 
+
+# Define functions for feature tagging the text
 def pos_tag(title, text):
     """
     Uses NLTK to POS tag the titles and the texts of each text
     :param title:
     :param text:
-    :return: return tuple containing the (POS tagged title, POS tagged text)
+    :return: (vectorized POS for title, vectorized POS for text)
     """
     text_words = nltk.word_tokenize(text)
     stop = nltk.corpus.stopwords.words("english")
@@ -162,7 +164,7 @@ def syntax(text):
     Use the pattern sentence tree parsing tool to split up the sentence into its chunk permutation
     :param title:
     :param text:
-    :return: (chunk permutation of title, chunk permutations of each sentence in the text)
+    :return: (chunk permutations of each type of the entire text)
     """
     s = pattern.en.parsetree(text, relations = True, lemmata = True)
     text_chunks = []
