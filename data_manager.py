@@ -102,7 +102,7 @@ except:
     for pop1, pop2 in zip(popular_sens, popular_unsens):
         most_popular_chunks.add(pop1[0])
         most_popular_chunks.add(pop2[0])
-    chunk_vectorizer = TfidfVectorizer(token_pattern='[^\s]+')
+    chunk_vectorizer = CountVectorizer(token_pattern='[^\s]+')
     chunk_vectorizer.fit(most_popular_chunks)
     pickle.dump(chunk_vectorizer, open("chunkvect.pkl", "wb"))
     print("Created pickle for the first time for chunk vectorizer")
