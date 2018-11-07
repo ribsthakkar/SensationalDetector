@@ -1,3 +1,5 @@
 .idea/
 .idea/vcs.xml
 output.txt
+.DS_Store/
+computed_data.pkl

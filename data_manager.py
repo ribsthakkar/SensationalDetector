@@ -8,8 +8,13 @@ from pattern.en.wordlist import PROFANITY
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import pickle
 
+computed = False
+try:
+    data = pandas.read_pickle("processed_data.csv")
+    computed = True
+except:
+    data = pandas.read_csv("training_data.csv")
 
-data = pandas.read_csv("training_data.csv")
 print("Number of Rows in Sensationalization dataset: ", len(data))
 print("Number of Cols in Sensationalization dataset: ", len(data.columns))
 # c = collections.Counter((row['Source'], row['Sensationalized']) for index, row in data.iterrows())
@@ -213,9 +218,40 @@ def capitals(title, text):
     return title_count, text_count
 
 
-
-### Iterate through each of the text, title combinations in the data. Compute the features and write to a pandas frame
+if not computed:
+    ### Iterate through each of the text, title combinations in the data. Compute the features and write to a pandas frame
+    features = (pos_tag, profanity_scan, sentiment_scan, sent_len, syntax, emphasis, capitals)
+    for feature in features:
+        print("Running the following feature: ", feature.__name__)
+        if feature.__name__ != "syntax" and feature.__name__ != "pos_tag":
+            output = (feature(row['Title'], row['Text']) for index, row in data.iterrows())
+            title_feats = []
+            text_feats = []
+            for x in output:
+                title_feats.append(x[0])
+                text_feats.append(x[1])
+            data[feature.__name__ + "_title"] = title_feats
+            data[feature.__name__ + "_text"] = text_feats
+        elif feature.__name__ == "pos_tag":
+            output = (feature(row['Title'], row['Text']) for index, row in data.iterrows())
+            title_feats = []
+            text_feats = []
+            for x in output:
+                title_feats.append(x[0].todense())
+                text_feats.append(x[1].todense())
+            data[feature.__name__ + "_title"] = title_feats
+            data[feature.__name__ + "_text"] = text_feats
+        else:
+            output = (feature(row['Text']) for index, row in data.iterrows())
+            text_feats = []
+            for x in output:
+                text_feats.append(x[0].todense())
+            data[feature.__name__ + "_text"] = text_feats
+    # pickle the data
+    data.to_pickle("computed_data.pkl")
 
 ### Store the pandas frame in another CSV
+data.to_csv("processed_data.csv", sep = ",")
 
 # **** Training the neural model for the data
+
