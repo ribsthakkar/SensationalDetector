@@ -312,20 +312,27 @@ for index, row in data.iterrows():
     emp_text = [int(row['emphasis_text'])]
     cap_title = [int(row['capitals_title'])]
     cap_text = [int(row['capitals_text'])]
-    output_vector = [*pos_title, *pos_text, *prof_title, *prof_text, *sent_text, *sent_title, *len_title, *len_text,
-                     *syntax_text, *emp_title, *emp_text, *cap_title, *cap_text]
-    all_data.append(output_vector)
+    output_vector = [pos_title, pos_text, prof_title, prof_text, sent_text, sent_title, len_title, len_text,
+                     syntax_text, emp_title, emp_text, cap_title, cap_text]
+    # all_data.append(output_vector)
+    vect = keras.preprocessing.sequence.pad_sequences(output_vector,
+                                                            value=0,
+                                                            padding='post',
+                                                            maxlen=128)
+    all_data.append(vect)
     all_labels.append(int(row['Sensationalized']))
-    print(index)
+    # print(index)
 
+print("Done loading vectors")
 model = keras.models.Sequential()
-model.add(keras.layers.Dense(128, activation=tf.nn.relu))
-model.add(keras.layers.Dense(64, activation=tf.nn.relu))
-model.add(keras.layers.Dense(32, activation=tf.nn.relu))
+model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=(13, 128)))
+model.add(keras.layers.Flatten())
+model.add(keras.layers.Dense(16, activation=tf.nn.relu))
+model.add(keras.layers.Dense(16, activation=tf.nn.relu))
 model.add(keras.layers.Dense(16, activation=tf.nn.relu))
 model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
 
-
+model.summary()
 
 model.compile(optimizer=tf.train.AdamOptimizer(),
               loss='binary_crossentropy',
@@ -334,8 +341,8 @@ model.compile(optimizer=tf.train.AdamOptimizer(),
 all_data = np.array(all_data)
 all_labels = np.array(all_labels)
 
-TRAIN_SIZE = 10000
-VALIDATION_SIZE = 1000
+TRAIN_SIZE = 14000
+VALIDATION_SIZE = 500
 
 train_data = all_data[:TRAIN_SIZE]
 train_labels = all_labels[:TRAIN_SIZE]
@@ -357,10 +364,6 @@ history = model.fit(partial_x_train,
 
 model.summary()
 print('----results----')
-results = model.evaluate(test_data, test_labels)
 
-print(results)
-print('----results other----')
-
-other = model.evaluate(all_data, all_labels)
+other = model.evaluate(all_data[TRAIN_SIZE:], all_labels[TRAIN_SIZE:])
 print(other)
