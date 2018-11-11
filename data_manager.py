@@ -7,12 +7,18 @@ from nltk.data import  load
 from pattern.en.wordlist import PROFANITY
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import pickle
+import numpy as np
+import re
+import tensorflow as tf
+from tensorflow.contrib import keras
 
 computed = False
 try:
-    data = pandas.read_pickle("processed_data.csv")
+    data = pandas.read_csv("processed_data3.csv")
     computed = True
+    print("finished reading processed")
 except:
+    print("processed had an error")
     data = pandas.read_csv("training_data.csv")
 
 print("Number of Rows in Sensationalization dataset: ", len(data))
@@ -52,7 +58,7 @@ except:
     print("pickle created for pos vectorizer")
 
 try:
-    with open("chunkvect.pkl", "rb") as pik:
+    with open("chunkvect_count.pkl", "rb") as pik:
         chunk_vectorizer = pickle.load(pik)
         print("Pickle preloaded for chunk vectorizer")
 except:
@@ -104,7 +110,7 @@ except:
         most_popular_chunks.add(pop2[0])
     chunk_vectorizer = CountVectorizer(token_pattern='[^\s]+')
     chunk_vectorizer.fit(most_popular_chunks)
-    pickle.dump(chunk_vectorizer, open("chunkvect.pkl", "wb"))
+    pickle.dump(chunk_vectorizer, open("chunkvect_count.pkl", "wb"))
     print("Created pickle for the first time for chunk vectorizer")
 
 
@@ -217,13 +223,12 @@ def capitals(title, text):
             title_count += 1
     return title_count, text_count
 
-
 if not computed:
     ### Iterate through each of the text, title combinations in the data. Compute the features and write to a pandas frame
     features = (pos_tag, profanity_scan, sentiment_scan, sent_len, syntax, emphasis, capitals)
     for feature in features:
         print("Running the following feature: ", feature.__name__)
-        if feature.__name__ != "syntax" and feature.__name__ != "pos_tag":
+        if feature.__name__ != "syntax" and feature.__name__ != "pos_tag" and feature.__name__ != "sentiment_scan":
             output = (feature(row['Title'], row['Text']) for index, row in data.iterrows())
             title_feats = []
             text_feats = []
@@ -237,21 +242,125 @@ if not computed:
             title_feats = []
             text_feats = []
             for x in output:
-                title_feats.append(x[0].todense())
-                text_feats.append(x[1].todense())
+                title_feats.append(x[0].todense()[0])
+                text_feats.append(x[1].todense()[0])
             data[feature.__name__ + "_title"] = title_feats
             data[feature.__name__ + "_text"] = text_feats
-        else:
+        elif feature.__name__ == "syntax":
             output = (feature(row['Text']) for index, row in data.iterrows())
             text_feats = []
             for x in output:
-                text_feats.append(x[0].todense())
+                text_feats.append(x[0].todense()[0])
             data[feature.__name__ + "_text"] = text_feats
+        else:
+            output = (feature(row['Title'], row['Text']) for index, row in data.iterrows())
+            title_feats_1 = []
+            title_feats_2 = []
+            text_feats_1 = []
+            text_feats_2 = []
+            for x in output:
+                title_feats_1.append(x[0][0])
+                title_feats_2.append(x[0][1])
+                text_feats_1.append(x[1][0])
+                text_feats_2.append(x[1][1])
+            data[feature.__name__ + "_title_polarity"] = title_feats_1
+            data[feature.__name__ + "_title_subjectivity"] = title_feats_2
+            data[feature.__name__ + "_text_polarity"] = text_feats_1
+            data[feature.__name__ + "_text_subjectivity"] = text_feats_2
     # pickle the data
-    data.to_pickle("computed_data.pkl")
+    data.to_pickle("computed_data2.pkl")
 
 ### Store the pandas frame in another CSV
-data.to_csv("processed_data.csv", sep = ",")
+data.to_csv("processed_data2.csv", sep = ";")
+
+def stringToList(string):
+    out = re.sub("\s+", ",", string.strip())
+    if out[2] == ',':
+        out = out.replace(",","", 1)
+    return eval(out)
+
+all_data = []
+all_labels = []
 
 # **** Training the neural model for the data
+for index, row in data.iterrows():
+    # print(row['Title'])
+    # print(row['Text'])
+    # print(stringToList(row['pos_tag_title']))
+    # print(stringToList(row['pos_tag_text']))
+    # print(row['profanity_scan_title'])
+    # print(row['profanity_scan_text'])
+    # print(eval(row['sentiment_scan_title']))
+    # print(eval(row['sentiment_scan_text']))
+    # print(row['sent_len_title'])
+    # print(row['sent_len_text'])
+    # print(eval(re.sub("\s+", ",", row['syntax_text'].strip())))
+    # print(row['emphasis_title'])
+    # print(row['capitals_title'])
+    # print(row['capitals_text'])
+    # print(row['Sensationalized'])
+    pos_title = stringToList(row['pos_tag_title'])[0]
+    pos_text = stringToList(row['pos_tag_text'])[0]
+    prof_title = [int(row['profanity_scan_title'])]
+    prof_text = [int(row['profanity_scan_text'])]
+    sent_text = eval(row['sentiment_scan_title'])
+    sent_title = eval(row['sentiment_scan_text'])
+    len_title = [int(row['sent_len_title'])]
+    len_text = [float(row['sent_len_text'])]
+    syntax_text = stringToList(row['syntax_text'])[0]
+    emp_title = [int(row['emphasis_title'])]
+    emp_text = [int(row['emphasis_text'])]
+    cap_title = [int(row['capitals_title'])]
+    cap_text = [int(row['capitals_text'])]
+    output_vector = [*pos_title, *pos_text, *prof_title, *prof_text, *sent_text, *sent_title, *len_title, *len_text,
+                     *syntax_text, *emp_title, *emp_text, *cap_title, *cap_text]
+    all_data.append(output_vector)
+    all_labels.append(int(row['Sensationalized']))
+    print(index)
 
+model = keras.models.Sequential()
+model.add(keras.layers.Dense(128, activation=tf.nn.relu))
+model.add(keras.layers.Dense(64, activation=tf.nn.relu))
+model.add(keras.layers.Dense(32, activation=tf.nn.relu))
+model.add(keras.layers.Dense(16, activation=tf.nn.relu))
+model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
+
+
+
+model.compile(optimizer=tf.train.AdamOptimizer(),
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
+
+all_data = np.array(all_data)
+all_labels = np.array(all_labels)
+
+TRAIN_SIZE = 10000
+VALIDATION_SIZE = 1000
+
+train_data = all_data[:TRAIN_SIZE]
+train_labels = all_labels[:TRAIN_SIZE]
+test_data = all_data[TRAIN_SIZE:]
+test_labels = all_data[TRAIN_SIZE:]
+
+x_val = train_data[:VALIDATION_SIZE]
+partial_x_train = train_data[VALIDATION_SIZE:]
+
+y_val = train_labels[:VALIDATION_SIZE]
+partial_y_train = train_labels[VALIDATION_SIZE:]
+
+history = model.fit(partial_x_train,
+                    partial_y_train,
+                    epochs=40,
+                    batch_size=512,
+                    validation_data=(x_val, y_val),
+                    verbose=1)
+
+model.summary()
+print('----results----')
+results = model.evaluate(test_data, test_labels)
+
+print(results)
+print('----results other----')
+
+other = model.evaluate(all_data, all_labels)
+print(other)
