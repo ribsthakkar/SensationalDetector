@@ -1,35 +1,35 @@
-import pandas
+'''
+Tensorflow code inspired by the Movie reivew classification tutorial in Tensorflow documentation:
+https://www.tensorflow.org/tutorials/keras/basic_text_classification
+'''
+
 import collections
-import nltk
-import string
-import pattern.en
-from nltk.data import  load
-from pattern.en.wordlist import PROFANITY
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import pickle
-import numpy as np
 import re
+import string
+
+import matplotlib.pyplot as plt
+import nltk
+import numpy as np
+import pandas
+import pattern.en
 import tensorflow as tf
+from nltk.data import load
+from pattern.en.wordlist import PROFANITY
+from sklearn.feature_extraction.text import CountVectorizer
 from tensorflow.contrib import keras
 
 computed = False
 try:
-    data = pandas.read_csv("processed_data3.csv")
+    data = pandas.read_csv("processed_data.csv")
     computed = True
     print("finished reading processed")
 except:
-    print("processed had an error")
+    print("processed had an error, reading original dataset instead")
     data = pandas.read_csv("training_data.csv")
 
 print("Number of Rows in Sensationalization dataset: ", len(data))
 print("Number of Cols in Sensationalization dataset: ", len(data.columns))
-# c = collections.Counter((row['Source'], row['Sensationalized']) for index, row in data.iterrows())
-# c2 = collections.Counter(row['Sensationalized'] for index, row in data.iterrows())
-# for index, row in data.iterrows():
-#     if index > 10:
-#         break
-#     c.update(row['Source'])
-#     print(row['Source'])
 
 # **** Feature tagging the Data
 '''
@@ -43,7 +43,7 @@ print("Number of Cols in Sensationalization dataset: ", len(data.columns))
 
 '''
 
-#### Setup vectorizers for features that don't naturally produce numeric values (POS and syntax)
+# ***** Setup vectorizers for features that don't naturally produce numeric values (POS and syntax)
 try:
     with open("posvect.pkl", "rb") as pik:
         pos_vectorizer = pickle.load(pik)
@@ -223,12 +223,14 @@ def capitals(title, text):
             title_count += 1
     return title_count, text_count
 
+# *** Feature tag the data if not tagged yet
+
 if not computed:
     ### Iterate through each of the text, title combinations in the data. Compute the features and write to a pandas frame
     features = (pos_tag, profanity_scan, sentiment_scan, sent_len, syntax, emphasis, capitals)
     for feature in features:
         print("Running the following feature: ", feature.__name__)
-        if feature.__name__ != "syntax" and feature.__name__ != "pos_tag" and feature.__name__ != "sentiment_scan":
+        if feature.__name__ != "syntax" and feature.__name__ != "pos_tag":
             output = (feature(row['Title'], row['Text']) for index, row in data.iterrows())
             title_feats = []
             text_feats = []
@@ -252,53 +254,21 @@ if not computed:
             for x in output:
                 text_feats.append(x[0].todense()[0])
             data[feature.__name__ + "_text"] = text_feats
-        else:
-            output = (feature(row['Title'], row['Text']) for index, row in data.iterrows())
-            title_feats_1 = []
-            title_feats_2 = []
-            text_feats_1 = []
-            text_feats_2 = []
-            for x in output:
-                title_feats_1.append(x[0][0])
-                title_feats_2.append(x[0][1])
-                text_feats_1.append(x[1][0])
-                text_feats_2.append(x[1][1])
-            data[feature.__name__ + "_title_polarity"] = title_feats_1
-            data[feature.__name__ + "_title_subjectivity"] = title_feats_2
-            data[feature.__name__ + "_text_polarity"] = text_feats_1
-            data[feature.__name__ + "_text_subjectivity"] = text_feats_2
-    # pickle the data
-    data.to_pickle("computed_data2.pkl")
 
-### Store the pandas frame in another CSV
-data.to_csv("processed_data2.csv", sep = ";")
+    ### Store the pandas frame in another CSV
+    data.to_csv("processed_data.csv", sep=",")
 
 def stringToList(string):
     out = re.sub("\s+", ",", string.strip())
     if out[2] == ',':
-        out = out.replace(",","", 1)
+        out = out.replace(",", "", 1)
     return eval(out)
 
 all_data = []
 all_labels = []
 
-# **** Training the neural model for the data
+# ****** Setup input matrix for the training data *****
 for index, row in data.iterrows():
-    # print(row['Title'])
-    # print(row['Text'])
-    # print(stringToList(row['pos_tag_title']))
-    # print(stringToList(row['pos_tag_text']))
-    # print(row['profanity_scan_title'])
-    # print(row['profanity_scan_text'])
-    # print(eval(row['sentiment_scan_title']))
-    # print(eval(row['sentiment_scan_text']))
-    # print(row['sent_len_title'])
-    # print(row['sent_len_text'])
-    # print(eval(re.sub("\s+", ",", row['syntax_text'].strip())))
-    # print(row['emphasis_title'])
-    # print(row['capitals_title'])
-    # print(row['capitals_text'])
-    # print(row['Sensationalized'])
     pos_title = stringToList(row['pos_tag_title'])[0]
     pos_text = stringToList(row['pos_tag_text'])[0]
     prof_title = [int(row['profanity_scan_title'])]
@@ -324,12 +294,14 @@ for index, row in data.iterrows():
     # print(index)
 
 print("Done loading vectors")
+
+# ***** Define neural network architecture ******
 model = keras.models.Sequential()
 model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=(13, 128)))
 model.add(keras.layers.Flatten())
-model.add(keras.layers.Dense(16, activation=tf.nn.relu))
-model.add(keras.layers.Dense(16, activation=tf.nn.relu))
-model.add(keras.layers.Dense(16, activation=tf.nn.relu))
+model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
+model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
+model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
 model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
 
 model.summary()
@@ -338,6 +310,9 @@ model.compile(optimizer=tf.train.AdamOptimizer(),
               loss='binary_crossentropy',
               metrics=['accuracy'])
 
+
+
+# ****** Setup training, validation, and test data for neural network ******
 all_data = np.array(all_data)
 all_labels = np.array(all_labels)
 
@@ -347,7 +322,7 @@ VALIDATION_SIZE = 500
 train_data = all_data[:TRAIN_SIZE]
 train_labels = all_labels[:TRAIN_SIZE]
 test_data = all_data[TRAIN_SIZE:]
-test_labels = all_data[TRAIN_SIZE:]
+test_labels = all_labels[TRAIN_SIZE:]
 
 x_val = train_data[:VALIDATION_SIZE]
 partial_x_train = train_data[VALIDATION_SIZE:]
@@ -355,15 +330,52 @@ partial_x_train = train_data[VALIDATION_SIZE:]
 y_val = train_labels[:VALIDATION_SIZE]
 partial_y_train = train_labels[VALIDATION_SIZE:]
 
+# Train the neural network
 history = model.fit(partial_x_train,
                     partial_y_train,
-                    epochs=40,
+                    epochs=60,
                     batch_size=512,
                     validation_data=(x_val, y_val),
                     verbose=1)
 
-model.summary()
-print('----results----')
 
-other = model.evaluate(all_data[TRAIN_SIZE:], all_labels[TRAIN_SIZE:])
-print(other)
+# ***** Evaluate the model with the test data ******
+print('----results----')
+results = model.evaluate(test_data, test_labels)
+print(results)
+
+# ***** Show Graphs about the training of the neural network *****
+
+history_dict = history.history
+history_dict.keys()
+
+acc = history.history['acc']
+val_acc = history.history['val_acc']
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+epochs = range(1, len(acc) + 1)
+
+# "bo" is for "blue dot"
+plt.plot(epochs, loss, 'bo', label='Training loss')
+# b is for "solid blue line"
+plt.plot(epochs, val_loss, 'b', label='Validation loss')
+plt.title('Training and validation loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+
+plt.show()
+
+plt.clf()   # clear figure
+acc_values = history_dict['acc']
+val_acc_values = history_dict['val_acc']
+
+plt.plot(epochs, acc, 'bo', label='Training acc')
+plt.plot(epochs, val_acc, 'b', label='Validation acc')
+plt.title('Training and validation accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+
+plt.show()
