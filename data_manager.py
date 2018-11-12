@@ -23,7 +23,7 @@ computed = False
 try:
     data = pandas.read_csv("processed_data.csv")
     computed = True
-    print("finished reading processed")
+    print("finished reading processed_training_data")
 except:
     print("processed had an error, reading original dataset instead")
     data = pandas.read_csv("training_data.csv")
@@ -258,6 +258,52 @@ if not computed:
     ### Store the pandas frame in another CSV
     data.to_csv("processed_data.csv", sep=",")
 
+# Feature tag test data if not yet
+test_computed = False
+try:
+    test = pandas.read_csv("processed_test_data.csv")
+    test_computed = True
+    print("finished reading processed")
+except:
+    print("processed had an error, reading original dataset instead")
+    test = pandas.read_csv("sample_test_data.csv")
+
+if not test_computed:
+    ### Iterate through each of the text, title combinations in the data. Compute the features and write to a pandas frame
+    features = (pos_tag, profanity_scan, sentiment_scan, sent_len, syntax, emphasis, capitals)
+    for feature in features:
+        print("Running the following feature: ", feature.__name__)
+        if feature.__name__ != "syntax" and feature.__name__ != "pos_tag":
+            output = (feature(row['Title'], row['Text']) for index, row in test.iterrows())
+            title_feats = []
+            text_feats = []
+            for x in output:
+                title_feats.append(x[0])
+                text_feats.append(x[1])
+            test[feature.__name__ + "_title"] = title_feats
+            test[feature.__name__ + "_text"] = text_feats
+        elif feature.__name__ == "pos_tag":
+            output = (feature(row['Title'], row['Text']) for index, row in test.iterrows())
+            title_feats = []
+            text_feats = []
+            for x in output:
+                title_feats.append(x[0].todense()[0])
+                text_feats.append(x[1].todense()[0])
+            test[feature.__name__ + "_title"] = title_feats
+            test[feature.__name__ + "_text"] = text_feats
+        elif feature.__name__ == "syntax":
+            try:
+                output = (feature(row['Text']) for index, row in test.iterrows())
+            except StopIteration:
+                continue
+            text_feats = []
+            for x in output:
+                text_feats.append(x[0].todense()[0])
+            test[feature.__name__ + "_text"] = text_feats
+
+    ### Store the pandas frame in another CSV
+    test.to_csv("processed_test_data.csv", sep=",")
+
 def stringToList(string):
     out = re.sub("\s+", ",", string.strip())
     if out[2] == ',':
@@ -266,6 +312,8 @@ def stringToList(string):
 
 all_data = []
 all_labels = []
+test_data = []
+test_labels = []
 
 # ****** Setup input matrix for the training data *****
 for index, row in data.iterrows():
@@ -293,11 +341,37 @@ for index, row in data.iterrows():
     all_labels.append(int(row['Sensationalized']))
     # print(index)
 
+
+# **** Setup input matrix for testing data
+for index, row in test.iterrows():
+    pos_title = stringToList(row['pos_tag_title'])[0]
+    pos_text = stringToList(row['pos_tag_text'])[0]
+    prof_title = [int(row['profanity_scan_title'])]
+    prof_text = [int(row['profanity_scan_text'])]
+    sent_text = eval(row['sentiment_scan_title'])
+    sent_title = eval(row['sentiment_scan_text'])
+    len_title = [int(row['sent_len_title'])]
+    len_text = [float(row['sent_len_text'])]
+    syntax_text = stringToList(row['syntax_text'])[0]
+    emp_title = [int(row['emphasis_title'])]
+    emp_text = [int(row['emphasis_text'])]
+    cap_title = [int(row['capitals_title'])]
+    cap_text = [int(row['capitals_text'])]
+    output_vector = [pos_title, pos_text, prof_title, prof_text, sent_text, sent_title, len_title, len_text,
+                     syntax_text, emp_title, emp_text, cap_title, cap_text]
+    # all_data.append(output_vector)
+    vect = keras.preprocessing.sequence.pad_sequences(output_vector,
+                                                            value=0,
+                                                            padding='post',
+                                                            maxlen=128)
+    test_data.append(vect)
+    test_labels.append(int(row['Sensationalized']))
+    # print(index)
 print("Done loading vectors")
 
 # ***** Define neural network architecture ******
 model = keras.models.Sequential()
-model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=(13, 128)))
+model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=all_data[0].shape))
 model.add(keras.layers.Flatten())
 model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
 model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
@@ -312,23 +386,20 @@ model.compile(optimizer=tf.train.AdamOptimizer(),
 
 
 
-# ****** Setup training, validation, and test data for neural network ******
+# ****** Setup training and  validation for neural network ******
 all_data = np.array(all_data)
 all_labels = np.array(all_labels)
+test_data = np.array(test_data)
+test_labels = np.array(test_labels)
 
-TRAIN_SIZE = 14000
-VALIDATION_SIZE = 500
+VALIDATION_SIZE = 2000
 
-train_data = all_data[:TRAIN_SIZE]
-train_labels = all_labels[:TRAIN_SIZE]
-test_data = all_data[TRAIN_SIZE:]
-test_labels = all_labels[TRAIN_SIZE:]
 
-x_val = train_data[:VALIDATION_SIZE]
-partial_x_train = train_data[VALIDATION_SIZE:]
+x_val = all_data[:VALIDATION_SIZE]
+partial_x_train = all_data[VALIDATION_SIZE:]
 
-y_val = train_labels[:VALIDATION_SIZE]
-partial_y_train = train_labels[VALIDATION_SIZE:]
+y_val = all_labels[:VALIDATION_SIZE]
+partial_y_train = all_labels[VALIDATION_SIZE:]
 
 # Train the neural network
 history = model.fit(partial_x_train,
@@ -336,6 +407,7 @@ history = model.fit(partial_x_train,
                     epochs=60,
                     batch_size=512,
                     validation_data=(x_val, y_val),
+                    shuffle=True,
                     verbose=1)
 
 
