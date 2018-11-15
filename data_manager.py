@@ -1,12 +1,16 @@
 '''
 Tensorflow code inspired by the Movie reivew classification tutorial in Tensorflow documentation:
 https://www.tensorflow.org/tutorials/keras/basic_text_classification
+
+CrossValidation score code inspired by MachineLearningMastery website:
+https://machinelearningmastery.com/evaluate-performance-deep-learning-models-keras/
 '''
 
 import collections
 import pickle
 import re
 import string
+import numpy
 
 import matplotlib.pyplot as plt
 import nltk
@@ -17,6 +21,7 @@ import tensorflow as tf
 from nltk.data import load
 from pattern.en.wordlist import PROFANITY
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.model_selection import StratifiedKFold
 from tensorflow.contrib import keras
 
 computed = False
@@ -369,85 +374,84 @@ for index, row in test.iterrows():
     # print(index)
 print("Done loading vectors")
 
-# ***** Define neural network architecture ******
-model = keras.models.Sequential()
-model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=all_data[0].shape))
-model.add(keras.layers.Flatten())
-model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
-model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
-model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
-model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
-
-model.summary()
-
-model.compile(optimizer=tf.train.AdamOptimizer(),
-              loss='binary_crossentropy',
-              metrics=['accuracy'])
-
-
-
 # ****** Setup training and  validation for neural network ******
 all_data = np.array(all_data)
 all_labels = np.array(all_labels)
 test_data = np.array(test_data)
 test_labels = np.array(test_labels)
 
-VALIDATION_SIZE = 2000
+completed_data = np.concatenate((all_data, test_data))
+completed_labels = np.concatenate((all_labels, test_labels))
 
-
-x_val = all_data[:VALIDATION_SIZE]
-partial_x_train = all_data[VALIDATION_SIZE:]
-
-y_val = all_labels[:VALIDATION_SIZE]
-partial_y_train = all_labels[VALIDATION_SIZE:]
-
-# Train the neural network
-history = model.fit(partial_x_train,
-                    partial_y_train,
-                    epochs=60,
-                    batch_size=512,
-                    validation_data=(x_val, y_val),
-                    shuffle=True,
-                    verbose=1)
-
-
-# ***** Evaluate the model with the test data ******
+seed = 7
+numpy.random.seed(seed)
+kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+cvscores = []
 print('----results----')
-results = model.evaluate(test_data, test_labels)
-print(results)
+for train, test in kfold.split(completed_data, completed_labels):
+    all_data = completed_data[train]
+    all_labels = completed_labels[train]
+    test_data = completed_data[test]
+    test_labels = completed_labels[test]
 
-# ***** Show Graphs about the training of the neural network *****
+    # ***** Define neural network architecture ******
+    model = keras.models.Sequential()
+    model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=all_data[0].shape))
+    model.add(keras.layers.Flatten())
+    model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
+    model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
+    model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
+    model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
 
-history_dict = history.history
-history_dict.keys()
+    # model.summary()
 
-acc = history.history['acc']
-val_acc = history.history['val_acc']
-loss = history.history['loss']
-val_loss = history.history['val_loss']
+    model.compile(optimizer=tf.train.AdamOptimizer(),
+                  loss='binary_crossentropy',
+                  metrics=['accuracy'])
 
-epochs = range(1, len(acc) + 1)
 
-# "bo" is for "blue dot"
-plt.plot(epochs, loss, 'bo', label='Training loss')
-# b is for "solid blue line"
-plt.plot(epochs, val_loss, 'b', label='Validation loss')
-plt.title('Training and validation loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
+    # Train the neural network
+    history = model.fit(all_data,
+                        all_labels,
+                        epochs=60,
+                        batch_size=512,
+                        verbose=0)
 
-plt.show()
 
-plt.clf()   # clear figure
-acc_values = history_dict['acc']
-val_acc_values = history_dict['val_acc']
+    # ***** Evaluate the model with the test data ******
+    results = model.evaluate(test_data, test_labels, verbose=0)
+    # print(results)
+    print("%s: %.2f%%" % (model.metrics_names[1], results[1] * 100))
+    cvscores.append(results[1] * 100)
 
-plt.plot(epochs, acc, 'bo', label='Training acc')
-plt.plot(epochs, val_acc, 'b', label='Validation acc')
-plt.title('Training and validation accuracy')
-plt.xlabel('Epochs')
-plt.ylabel('Accuracy')
-plt.legend()
+    # ***** Show Graphs about the training of the neural network *****
 
-plt.show()
+    history_dict = history.history
+    history_dict.keys()
+
+    acc = history.history['acc']
+    loss = history.history['loss']
+
+    epochs = range(1, len(acc) + 1)
+
+    # "bo" is for "blue dot"
+    plt.plot(epochs, loss, 'bo', label='Training loss')
+    # b is for "solid blue line"
+    plt.title('Training loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.show()
+
+    plt.clf()   # clear figure
+    acc_values = history_dict['acc']
+
+    plt.plot(epochs, acc, 'bo', label='Training acc')
+    plt.title('Training accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+
+    plt.show()
+print("%.2f%% (+/- %.2f%%)" % (numpy.mean(cvscores), numpy.std(cvscores)))
