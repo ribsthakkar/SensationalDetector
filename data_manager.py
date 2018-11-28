@@ -405,7 +405,7 @@ for train, test in kfold.split(completed_data, completed_labels):
 
     # model.summary()
 
-    model.compile(optimizer=tf.train.AdamOptimizer(),
+    model.compile(optimizer=keras.optimizers.Adam(),
                   loss='binary_crossentropy',
                   metrics=['accuracy'])
 
@@ -424,34 +424,50 @@ for train, test in kfold.split(completed_data, completed_labels):
     print("%s: %.2f%%" % (model.metrics_names[1], results[1] * 100))
     cvscores.append(results[1] * 100)
 
+    # Save model to file if not exists or if it performs better than file model
+    try:
+        saved_model = keras.models.load_model('sensational_detector_model.h5')
+        results_saved = saved_model.evaluate(test_data, test_labels, verbose=0)
+        if results_saved[1] < results[1]:
+            print("found a better model and saving it")
+            model.save('sensational_detector_model.h5')
+        else:
+            print("model not better than saved")
+    except FileNotFoundError:
+        print("Model does not exist, saving it")
+        model.save('sensational_detector_model.h5')
     # ***** Show Graphs about the training of the neural network *****
 
-    history_dict = history.history
-    history_dict.keys()
+    # history_dict = history.history
+    # history_dict.keys()
+    #
+    # acc = history.history['acc']
+    # loss = history.history['loss']
+    #
+    # epochs = range(1, len(acc) + 1)
+    #
+    # # "bo" is for "blue dot"
+    # plt.plot(epochs, loss, 'bo', label='Training loss')
+    # # b is for "solid blue line"
+    # plt.title('Training loss')
+    # plt.xlabel('Epochs')
+    # plt.ylabel('Loss')
+    # plt.legend()
+    #
+    # plt.show()
+    #
+    # plt.clf()   # clear figure
+    # acc_values = history_dict['acc']
+    #
+    # plt.plot(epochs, acc, 'bo', label='Training acc')
+    # plt.title('Training accuracy')
+    # plt.xlabel('Epochs')
+    # plt.ylabel('Accuracy')
+    # plt.legend()
+    #
+    # plt.show()
 
-    acc = history.history['acc']
-    loss = history.history['loss']
 
-    epochs = range(1, len(acc) + 1)
-
-    # "bo" is for "blue dot"
-    plt.plot(epochs, loss, 'bo', label='Training loss')
-    # b is for "solid blue line"
-    plt.title('Training loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-
-    plt.show()
-
-    plt.clf()   # clear figure
-    acc_values = history_dict['acc']
-
-    plt.plot(epochs, acc, 'bo', label='Training acc')
-    plt.title('Training accuracy')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.legend()
-
-    plt.show()
 print("%.2f%% (+/- %.2f%%)" % (numpy.mean(cvscores), numpy.std(cvscores)))
+
+
