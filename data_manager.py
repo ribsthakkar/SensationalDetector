@@ -375,13 +375,13 @@ for index, row in test.iterrows():
 print("Done loading vectors")
 
 # ****** Setup training and  validation for neural network ******
-all_data = np.array(all_data)
-all_labels = np.array(all_labels)
-test_data = np.array(test_data)
-test_labels = np.array(test_labels)
+all_data_full = np.array(all_data)
+all_labels_full = np.array(all_labels)
+test_data_full = np.array(test_data)
+test_labels_full = np.array(test_labels)
 
-completed_data = np.concatenate((all_data, test_data))
-completed_labels = np.concatenate((all_labels, test_labels))
+completed_data = np.concatenate((all_data_full, test_data_full))
+completed_labels = np.concatenate((all_labels_full, test_labels_full))
 
 seed = 7
 numpy.random.seed(seed)
@@ -396,11 +396,11 @@ for train, test in kfold.split(completed_data, completed_labels):
 
     # ***** Define neural network architecture ******
     model = keras.models.Sequential()
-    model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=all_data[0].shape))
+    model.add(keras.layers.Conv1D(32, kernel_size=(1,), input_shape=all_data[0].shape, use_bias=True))
     model.add(keras.layers.Flatten())
-    model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
-    model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
-    model.add(keras.layers.Dense(16, activation=tf.nn.tanh))
+    model.add(keras.layers.Dense(32, activation=tf.nn.tanh))
+    model.add(keras.layers.Dense(32, activation=tf.nn.tanh))
+    model.add(keras.layers.Dense(32, activation=tf.nn.tanh))
     model.add(keras.layers.Dense(1, activation=tf.nn.sigmoid))
 
     # model.summary()
@@ -427,12 +427,13 @@ for train, test in kfold.split(completed_data, completed_labels):
     # Save model to file if not exists or if it performs better than file model
     try:
         saved_model = keras.models.load_model('sensational_detector_model.h5')
-        results_saved = saved_model.evaluate(test_data, test_labels, verbose=0)
-        if results_saved[1] < results[1]:
+        results_saved = saved_model.evaluate(test_data_full, test_labels_full, verbose=0)
+        results1 = model.evaluate(test_data_full, test_labels_full, verbose=0)
+        if results_saved[1] < results1[1]:
             print("found a better model and saving it")
             model.save('sensational_detector_model.h5')
         else:
-            print("model not better than saved")
+            print(f"model not better than saved, saved is {results_saved[1]}")
     except FileNotFoundError:
         print("Model does not exist, saving it")
         model.save('sensational_detector_model.h5')

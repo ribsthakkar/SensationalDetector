@@ -5,3 +5,14 @@ output.txt
 computed_data*
 venv/
 __pycache__/
+academic-papers*
+academic-papers/
+.python-version
+articles1.csv
+articles1.csv.zip
+dump.rdb
+fake-news.zip
+fake.csv
+fakenews.csv
+
+
